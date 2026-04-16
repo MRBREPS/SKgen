@@ -282,6 +282,22 @@ def _strip_suffix(name: str) -> str:
     return re.sub(r"\s*\([^)]*\)\s*$", "", name).strip()
 
 
+def _extract_phone_short(phone_str: str) -> str:
+    """'8-57-4004' → '4004', '2102, 2103' → '2102', '43-29' → '4329'"""
+    if not phone_str:
+        return ""
+    first = phone_str.split(",")[0].strip()
+    # Формат 8-57-XXXX → берём последние 4 цифры после последнего дефиса
+    if "-" in first:
+        parts = first.split("-")
+        last = re.sub(r"\D", "", parts[-1])
+        if len(last) == 4:
+            return last
+    # Просто последние 4 цифры из строки
+    digits = re.sub(r"\D", "", first)
+    return digits[-4:] if len(digits) >= 4 else first
+
+
 # ══════════════════════════════════════════════════════
 #  Загрузка данных
 # ══════════════════════════════════════════════════════
@@ -324,8 +340,9 @@ def load_phone_book(path: str) -> dict:
             dept_employees = []
             current_dept = name
         else:
+            phone_raw = str(row[5]).strip() if len(row) > 5 else ""
             dept_employees.append(
-                {"name": name, "position": pos, "department": current_dept}
+                {"name": name, "position": pos, "department": current_dept, "phone": phone_raw}
             )
     flush_dept()
     return result
@@ -1425,6 +1442,271 @@ def _akt_cell(cell, text, align=WD_ALIGN_PARAGRAPH.LEFT, size=12, bold=False):
         r.font.size = Pt(size)
     r.bold = bold
 
+
+def generate_ecp_zayavka(data: dict, output_path: str):
+    """Генерирует заявку на предоставление доступа в ГИС ЕЦП."""
+    C = WD_ALIGN_PARAGRAPH.CENTER
+    J = WD_ALIGN_PARAGRAPH.JUSTIFY
+    L = WD_ALIGN_PARAGRAPH.LEFT
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.page_width = Cm(21)
+    sec.page_height = Cm(29.7)
+    sec.left_margin = Cm(2.0)    # 1134 DXA — точно по оригиналу
+    sec.right_margin = Cm(1.5)   # 851 DXA
+    sec.top_margin = Cm(1.5)     # 851 DXA
+    sec.bottom_margin = Cm(1.5)  # 851 DXA
+
+    def _rn(para, text, sz=12, bold=False, underline=False, italic=False):
+        r = para.add_run(text)
+        r.font.name = "Times New Roman"
+        r.font.size = Pt(sz)
+        r.bold = bold
+        r.underline = underline
+        r.italic = italic
+        rPr = r._r.get_or_add_rPr()
+        rFonts = OxmlElement("w:rFonts")
+        for attr in ("w:ascii", "w:hAnsi", "w:cs"):
+            rFonts.set(qn(attr), "Times New Roman")
+        ex = rPr.find(qn("w:rFonts"))
+        if ex is not None:
+            rPr.remove(ex)
+        rPr.insert(0, rFonts)
+        return r
+
+    def _ep(container=None):
+        p = (container or doc).add_paragraph()
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        return p
+
+    def _vAlign(cell, val="center"):
+        tcPr = cell._tc.get_or_add_tcPr()
+        ex = tcPr.find(qn("w:vAlign"))
+        if ex is not None:
+            tcPr.remove(ex)
+        va = OxmlElement("w:vAlign")
+        va.set(qn("w:val"), val)
+        tcPr.append(va)
+
+    # ── Шапка: org слева, адресат справа ─────────────────────────
+    t0 = doc.add_table(rows=1, cols=2)
+    _no_table_borders(t0)
+    _set_col_width(t0.cell(0, 0), 5500)
+    _set_col_width(t0.cell(0, 1), 4421)
+    _no_cell_borders(t0.cell(0, 0))
+    _no_cell_borders(t0.cell(0, 1))
+
+    # Левая ячейка: организация + № + дата
+    lc = t0.cell(0, 0)
+    p = lc.paragraphs[0]
+    p.alignment = C
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _rn(p, "Социальный фонд России", sz=9)
+
+    for line in [
+        "Отделение Фонда пенсионного и",
+        "социального страхования",
+        "Российской Федерации",
+        "по Санкт-Петербургу и Ленинградской",
+        "области",
+        "(ОСФР по Санкт-Петербургу и",
+        "Ленинградской области)",
+    ]:
+        p2 = lc.add_paragraph()
+        p2.alignment = C
+        p2.paragraph_format.space_before = Pt(0)
+        p2.paragraph_format.space_after = Pt(0)
+        _rn(p2, line, sz=11, bold=True)
+
+    _ep(lc)  # пустая строка
+
+    p_num = lc.add_paragraph()
+    p_num.alignment = C
+    p_num.paragraph_format.space_before = Pt(0)
+    p_num.paragraph_format.space_after = Pt(0)
+    _rn(p_num, f'№ {data["reg_number"]}')
+
+    p_dt = lc.add_paragraph()
+    p_dt.alignment = C
+    p_dt.paragraph_format.space_before = Pt(0)
+    p_dt.paragraph_format.space_after = Pt(0)
+    _rn(p_dt, data["date_short"])
+
+    # Правая ячейка: адресат
+    rc = t0.cell(0, 1)
+    p = rc.paragraphs[0]
+    p.alignment = L
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _rn(p, "Заместителю управляющего Отделением", sz=13)
+    _ep(rc)
+    p3 = rc.add_paragraph()
+    p3.alignment = L
+    p3.paragraph_format.space_before = Pt(0)
+    p3.paragraph_format.space_after = Pt(0)
+    _rn(p3, "Г. Г. Щемелеву", sz=13)
+
+    _ep()  # отступ после шапки
+
+    # ── Заголовок ─────────────────────────────────────────────────
+    p = _para(doc, align=C)
+    _run(p, "ЗАЯВКА", bold=True, size=13)
+    p = _para(doc, align=C)
+    _run(p, "на предоставление доступа", bold=True, size=13)
+    _ep()
+
+    # ── Основной текст ────────────────────────────────────────────
+    env = data.get("env", "prod")
+    unlock = data.get("action_unlock", False)
+    change_pass = data.get("action_change_pass", False)
+
+    p = doc.add_paragraph()
+    p.alignment = J
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.first_line_indent = Cm(1.27)
+
+    _rn(p, "Для работы в ", sz=13)
+    if env == "prod":
+        _rn(p, "ГИС ЕЦП (ИС КНД) Прод", sz=13, bold=True, underline=True)
+        _rn(p, " / ГИС ЕЦП ТЕСТ", sz=13)
+    else:
+        _rn(p, "ГИС ЕЦП (ИС КНД) Прод", sz=13)
+        _rn(p, " / ", sz=13)
+        _rn(p, "ГИС ЕЦП ТЕСТ", sz=13, bold=True, underline=True)
+    _rn(p, " прошу зарегистрировать/ изменить доступ/ добавить доступ/ отозвать доступ/ ", sz=13)
+    _rn(p, "разблокировать пользователя", sz=13, bold=unlock, underline=unlock)
+    _rn(p, "/ ", sz=13)
+    _rn(p, "сменить пароль", sz=13, bold=change_pass, underline=change_pass)
+
+    # (Нужное подчеркнуть, выделить) — верхняя граница вместо строки подчёркиваний
+    p = _para(doc, align=C)
+    _run(p, "(Нужное подчеркнуть, выделить)", bold=True)
+    pPr = p._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    top = OxmlElement("w:top")
+    top.set(qn("w:val"), "single")
+    top.set(qn("w:sz"), "4")
+    top.set(qn("w:space"), "1")
+    top.set(qn("w:color"), "000000")
+    pBdr.append(top)
+    pPr.append(pBdr)
+
+    _ep()
+
+    # ── Таблица — точные ширины из оригинала ──────────────────────
+    # Col widths: 567, 1702, 1134, 1275, 1418, 1559, 1559, 1418 = 10632
+    col_widths_tbl = [567, 1702, 1134, 1275, 1418, 1559, 1559, 1418]
+
+    t1 = doc.add_table(rows=3, cols=8)
+    _set_table_col_widths(t1, col_widths_tbl)
+
+    # tblInd = -34 (как в оригинале)
+    tblPr1 = t1._tbl.find(qn("w:tblPr"))
+    tblInd1 = OxmlElement("w:tblInd")
+    tblInd1.set(qn("w:w"), "-34")
+    tblInd1.set(qn("w:type"), "dxa")
+    tblPr1.append(tblInd1)
+
+    # Строка 0: заголовки (sz=11, bold)
+    hdr_lines = [
+        ("№", "п/п"),
+        ("Фамилия, имя, отчество", "(полностью)"),
+        ("Управление, отдел", ""),
+        ("Должность", ""),
+        ("Шаблон роли", "ИС КНД"),
+        ("Система", "ЕЦП"),
+        ("Подсистема", "ЕЦП"),
+        ("Шаблон роли", "ЕЦП"),
+    ]
+    for ci, (h1, h2) in enumerate(hdr_lines):
+        cell = t1.cell(0, ci)
+        _cell_border(cell, {"top": 4, "left": 4, "bottom": 4, "right": 4})
+        _vAlign(cell)
+        p = cell.paragraphs[0]
+        p.alignment = C
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        _rn(p, h1, sz=11, bold=True)
+        if h2:
+            p2 = cell.add_paragraph()
+            p2.alignment = C
+            p2.paragraph_format.space_before = Pt(0)
+            p2.paragraph_format.space_after = Pt(0)
+            _rn(p2, h2, sz=11, bold=True)
+
+    # Строка 1: номера 1-8 (sz=12)
+    for ci, num in enumerate(["1", "2", "3", "4", "5", "6", "7", "8"]):
+        cell = t1.cell(1, ci)
+        _cell_border(cell, {"top": 4, "left": 4, "bottom": 4, "right": 4})
+        _vAlign(cell)
+        p = cell.paragraphs[0]
+        p.alignment = C
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        _rn(p, num, sz=12)
+
+    # Строка 2: данные (sz=12)
+    values = [
+        ("1",                        C),
+        (data.get("emp_name", ""),   L),
+        (data.get("emp_dept", ""),   L),
+        (data.get("emp_position",""),L),
+        ("", C), ("", C), ("", C), ("", C),
+    ]
+    for ci, (val, align) in enumerate(values):
+        cell = t1.cell(2, ci)
+        _cell_border(cell, {"top": 4, "left": 4, "bottom": 4, "right": 4})
+        _vAlign(cell)
+        p = cell.paragraphs[0]
+        p.alignment = align
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        if val:
+            _rn(p, val, sz=12)
+
+    # ── Блок подписи ──────────────────────────────────────────────
+    _ep()
+    _ep()
+
+    t2 = doc.add_table(rows=1, cols=2)
+    _no_table_borders(t2)
+    _set_col_width(t2.cell(0, 0), 7905)
+    _set_col_width(t2.cell(0, 1), 2232)
+    _no_cell_borders(t2.cell(0, 0))
+    # Правая ячейка: только нижняя граница (линия для подписи)
+    _cell_border(t2.cell(0, 1), {"bottom": 4})
+
+    p = t2.cell(0, 0).paragraphs[0]
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _rn(p, "Руководитель   структурного подразделения", sz=14)
+
+    p = t2.cell(0, 1).paragraphs[0]
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _rn(p, data.get("chief_initials", ""), sz=14)
+
+    # Пустые строки для места подписи
+    for _ in range(8):
+        _ep()
+
+    # ── Исполнитель ───────────────────────────────────────────────
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _rn(p, "Исполнитель Тел", sz=14)
+
+    p2 = doc.add_paragraph()
+    p2.paragraph_format.space_before = Pt(0)
+    p2.paragraph_format.space_after = Pt(0)
+    phone = data.get("phone_short", "")
+    _rn(p2, phone if phone else "________", sz=14)
+
+    doc.save(output_path)
 
 def generate_akt_pki(data: dict, output_path: str):
     """Строит Акт установки СКЗИ ViPNet PKI Client с нуля через python-docx."""
@@ -3553,6 +3835,457 @@ class KriptoproApp(BaseZayavkaApp):
 
 
 # ══════════════════════════════════════════════════════
+#  ECPApp — Заявки на доступ в ГИС ЕЦП
+# ══════════════════════════════════════════════════════
+
+
+class ECPApp(tk.Toplevel):
+
+    def __init__(self, launcher):
+        super().__init__(launcher)
+        self._launcher = launcher
+        self.title("Заявка на доступ в ГИС ЕЦП")
+        self.geometry("800x920")
+        self.resizable(True, True)
+        self.cfg = load_config()
+        self.phone_data = {}
+        self.journal_info = {}
+        self.all_names = []
+        self._chief_pos_prefix = ""
+        self._chief_abbrev = ""
+        self.protocol("WM_DELETE_WINDOW", self._back)
+        self._build_ui()
+        self._load_files()
+        self._bind_clipboard()
+
+    def _back(self):
+        self._launcher.deiconify()
+        self.destroy()
+
+    def _bind_clipboard(self):
+        pass  # clipboard handled at root level in LauncherWindow
+
+    # ── UI ────────────────────────────────────────────
+
+    def _build_ui(self):
+        main_canvas = tk.Canvas(
+            self, borderwidth=0, highlightthickness=0, yscrollincrement=20
+        )
+        vbar = ttk.Scrollbar(self, orient="vertical", command=main_canvas.yview)
+        main_canvas.configure(yscrollcommand=vbar.set)
+        vbar.pack(side="right", fill="y")
+        main_canvas.pack(side="left", fill="both", expand=True)
+
+        main = tk.Frame(main_canvas)
+        self._main_win = main_canvas.create_window((0, 0), window=main, anchor="nw")
+        main.bind(
+            "<Configure>",
+            lambda _: main_canvas.configure(scrollregion=main_canvas.bbox("all")),
+        )
+        main_canvas.bind(
+            "<Configure>",
+            lambda e: main_canvas.itemconfig(self._main_win, width=e.width),
+        )
+
+        def _sd(event):
+            return int(-1 * (event.delta / 120)) if abs(event.delta) >= 120 else (-1 if event.delta > 0 else 1)
+
+        def _on_mousewheel(event):
+            if not event.delta or not main_canvas.winfo_exists():
+                return
+            main_canvas.yview_scroll(_sd(event), "units")
+
+        def _on_wheel_linux(event, direction):
+            if not main_canvas.winfo_exists():
+                return
+            main_canvas.yview_scroll(direction, "units")
+
+        self.bind_all("<MouseWheel>", _on_mousewheel)
+        self.bind_all("<Button-4>", lambda e: _on_wheel_linux(e, -1))
+        self.bind_all("<Button-5>", lambda e: _on_wheel_linux(e, 1))
+
+        PAD = dict(padx=8, pady=4)
+
+        ttk.Button(main, text="← Назад", command=self._back).pack(
+            anchor="w", padx=8, pady=(6, 0)
+        )
+
+        # ── Файлы ─────────────────────────────────────
+        ff = ttk.LabelFrame(main, text="  Файлы данных  ", padding=8)
+        ff.pack(fill="x", **PAD)
+        file_specs = [
+            ("phone_book", "Телефонный справочник (.xls):", [("XLS", "*.xls"), ("Все", "*.*")]),
+            ("journal",    "Журнал регистрации (.docx):",   [("DOCX", "*.docx"), ("Все", "*.*")]),
+        ]
+        self._file_vars = {}
+        for ri, (key, label, ftypes) in enumerate(file_specs):
+            ttk.Label(ff, text=label, width=30, anchor="w").grid(row=ri, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=self.cfg.get(key, ""))
+            self._file_vars[key] = var
+            ttk.Entry(ff, textvariable=var, width=42).grid(row=ri, column=1, padx=4)
+            ttk.Button(
+                ff, text="…", width=3,
+                command=lambda k=key, ft=ftypes: self._pick_file(k, ft),
+            ).grid(row=ri, column=2)
+        ttk.Button(
+            ff, text="↺  Загрузить / обновить файлы", command=self._load_files
+        ).grid(row=2, column=0, columnspan=3, pady=(6, 0))
+
+        # ── Поиск ─────────────────────────────────────
+        fs = ttk.LabelFrame(main, text="  Поиск сотрудника  ", padding=8)
+        fs.pack(fill="x", **PAD)
+        fs.columnconfigure(1, weight=1)
+        ttk.Label(fs, text="ФИО:").grid(row=0, column=0, sticky="w")
+        self.search_var = tk.StringVar()
+        self.search_var.trace("w", self._on_search_change)
+        ttk.Entry(fs, textvariable=self.search_var, width=40).grid(row=0, column=1, padx=4, sticky="ew")
+        ttk.Button(fs, text="Найти", command=self._do_search).grid(row=0, column=2)
+        self.status_var = tk.StringVar(value="")
+        self._status_lbl = tk.Label(
+            fs, textvariable=self.status_var, foreground="#555",
+            wraplength=550, anchor="w", justify="left",
+            font=("TkDefaultFont", 11, "bold"),
+        )
+        self._status_lbl.grid(row=0, column=3, padx=(12, 4), sticky="ew")
+        fs.columnconfigure(3, weight=1)
+        self.lb = tk.Listbox(fs, height=10, width=50, font=("TkDefaultFont", 10))
+        self.lb.grid(row=1, column=0, columnspan=2, pady=(4, 0), sticky="ew")
+        self.lb.bind("<<ListboxSelect>>", self._on_select)
+        sb = ttk.Scrollbar(fs, orient="vertical", command=self.lb.yview)
+        sb.grid(row=1, column=2, sticky="ns", pady=(4, 0))
+        self.lb.configure(yscrollcommand=sb.set)
+        self.lb.bind("<MouseWheel>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(int(-1*(e.delta/120)) if abs(e.delta)>=120 else (-1 if e.delta>0 else 1), "units"), "break")[1] if e.delta else "break")
+        self.lb.bind("<Button-4>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"), "break")[1])
+        self.lb.bind("<Button-5>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"), "break")[1])
+
+        # ── Данные сотрудника ─────────────────────────
+        fe = ttk.LabelFrame(main, text="  Данные сотрудника (для документа)  ", padding=8)
+        fe.pack(fill="x", **PAD)
+        fe.columnconfigure(1, weight=1)
+        self._emp = {}
+        missing_frame = ttk.Frame(fe)
+        missing_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self._missing_var = tk.StringVar(value="")
+        self._missing_lbl = tk.Label(
+            missing_frame, textvariable=self._missing_var,
+            foreground="#cc0000", anchor="w", justify="left",
+            font=("TkDefaultFont", 10), wraplength=600,
+        )
+        self._missing_lbl.pack(fill="x")
+
+        fields = [
+            ("emp_name",      "ФИО сотрудника:"),
+            ("emp_dept",      "Управление / Отдел:"),
+            ("emp_position",  "Должность:"),
+            ("chief_initials","Инициалы начальника (подпись):"),
+            ("phone_short",   "Телефон (4 цифры):"),
+        ]
+        for i, (key, label) in enumerate(fields, start=1):
+            ttk.Label(fe, text=label, anchor="w", width=34).grid(row=i, column=0, sticky="w", pady=2)
+            var = tk.StringVar()
+            self._emp[key] = var
+            ttk.Entry(fe, textvariable=var, width=46).grid(row=i, column=1, padx=4, sticky="ew")
+
+        # ── Среда ─────────────────────────────────────
+        fenv = ttk.LabelFrame(main, text="  Среда  ", padding=8)
+        fenv.pack(fill="x", **PAD)
+        self.env_var = tk.StringVar(value="prod")
+        ttk.Radiobutton(fenv, text="ГИС ЕЦП (ИС КНД) Прод", variable=self.env_var, value="prod").pack(side="left", padx=16)
+        ttk.Radiobutton(fenv, text="ГИС ЕЦП ТЕСТ",           variable=self.env_var, value="test").pack(side="left", padx=16)
+
+        # ── Действия ──────────────────────────────────
+        fact = ttk.LabelFrame(main, text="  Действие  ", padding=8)
+        fact.pack(fill="x", **PAD)
+        self.action_unlock_var = tk.BooleanVar(value=False)
+        self.action_change_pass_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(fact, text="Разблокировать пользователя", variable=self.action_unlock_var).pack(anchor="w", padx=16)
+        ttk.Checkbutton(fact, text="Сменить пароль",              variable=self.action_change_pass_var).pack(anchor="w", padx=16)
+
+        # ── Реквизиты ─────────────────────────────────
+        fd = ttk.LabelFrame(main, text="  Реквизиты документа  ", padding=8)
+        fd.pack(fill="x", **PAD)
+        fd.columnconfigure(1, weight=1)
+        self._doc = {}
+        now = datetime.now()
+        for i, (key, label, default) in enumerate([
+            ("reg_number", "Рег. номер:",         ""),
+            ("date_short", "Дата (дд.мм.гггг):",  now.strftime("%d.%m.%Y")),
+            ("executor",   "Исполнитель (журнал):", ""),
+            ("output_dir", "Папка сохранения:",    os.path.expanduser("~/Desktop")),
+        ]):
+            ttk.Label(fd, text=label, anchor="w", width=26).grid(row=i, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=default)
+            self._doc[key] = var
+            ttk.Entry(fd, textvariable=var, width=44).grid(row=i, column=1, padx=4, sticky="ew")
+            if key == "output_dir":
+                ttk.Button(fd, text="…", width=3, command=self._pick_outdir).grid(row=i, column=2)
+
+        ttk.Button(
+            main, text="📄   Создать заявку и добавить в журнал", command=self._generate
+        ).pack(pady=10, ipadx=16, ipady=6)
+
+        self._load_status_var = tk.StringVar(value="Укажите файлы данных и нажмите «Загрузить»")
+        self._load_status_lbl = ttk.Label(
+            main, textvariable=self._load_status_var, foreground="#555", wraplength=700
+        )
+        self._load_status_lbl.pack(pady=(0, 12))
+
+    # ── Helpers ───────────────────────────────────────
+
+    def _set_status(self, text, color="gray"):
+        clr = {"green": "#1a7a1a", "red": "#cc0000", "orange": "#b06000", "gray": "#555"}
+        self.status_var.set(text)
+        self._status_lbl.configure(foreground=clr.get(color, "#555"))
+
+    def _set_load_status(self, text, color="gray"):
+        clr = {"green": "#2a7a2a", "red": "#cc0000", "gray": "#555"}
+        self._load_status_var.set(text)
+        self._load_status_lbl.configure(foreground=clr.get(color, "#555"))
+
+    def _pick_file(self, key, filetypes):
+        path = filedialog.askopenfilename(filetypes=filetypes)
+        if path:
+            self._file_vars[key].set(path)
+            self.cfg[key] = path
+            save_config(self.cfg)
+
+    def _pick_outdir(self):
+        d = filedialog.askdirectory()
+        if d:
+            self._doc["output_dir"].set(d)
+
+    def _open_file(self, path):
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["open", path])
+            elif sys.platform == "win32":
+                os.startfile(path)
+            else:
+                subprocess.run(["xdg-open", path])
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось открыть: {e}")
+
+    # ── Load ──────────────────────────────────────────
+
+    def _load_files(self):
+        paths = {k: self._file_vars[k].get().strip() for k in self._file_vars}
+        errors = []
+        loaded = 0
+
+        if paths["phone_book"] and os.path.exists(paths["phone_book"]):
+            try:
+                self.phone_data = load_phone_book(paths["phone_book"])
+                self.all_names = sorted(self.phone_data.keys())
+                loaded += 1
+            except Exception as e:
+                errors.append(f"Справочник: {e}")
+
+        if paths["journal"] and os.path.exists(paths["journal"]):
+            try:
+                self.journal_info = get_journal_info(paths["journal"])
+                self._doc["reg_number"].set(self.journal_info["next_reg"])
+                if self.journal_info["last_executor"]:
+                    self._doc["executor"].set(self.journal_info["last_executor"])
+                loaded += 1
+            except Exception as e:
+                errors.append(f"Журнал: {e}")
+
+        for k in paths:
+            self.cfg[k] = paths[k]
+        save_config(self.cfg)
+
+        if errors:
+            self._set_load_status("⚠ " + " | ".join(errors), "red")
+        else:
+            ji = self.journal_info
+            self._set_load_status(
+                f"✓ Загружено {loaded}/2 файлов. "
+                f"Сотрудников: {len(self.all_names)}. "
+                f"Следующий рег. номер: {ji.get('next_reg', '—')}",
+                "green",
+            )
+
+    # ── Search ────────────────────────────────────────
+
+    def _on_search_change(self, *_):
+        q = self.search_var.get().strip().lower()
+        self.lb.delete(0, tk.END)
+        if len(q) < 2:
+            return
+        for name in self.all_names:
+            if q in name.lower():
+                self.lb.insert(tk.END, name)
+
+    def _do_search(self):
+        self._on_search_change()
+
+    def _on_select(self, _):
+        sel = self.lb.curselection()
+        if not sel:
+            return
+        name = self.lb.get(sel[0])
+        self.search_var.set(name)
+        self._fill_employee(name)
+
+    def _fill_employee(self, name: str):
+        emp = self.phone_data.get(name, {})
+        position  = emp.get("position", "")
+        dept      = emp.get("department", "")
+        phone_raw = emp.get("phone", "")
+        abbrev    = abbreviate_dept(dept)
+
+        self._chief_pos_prefix = chief_position_prefix(emp.get("chief_position", ""))
+        self._chief_abbrev = abbrev
+
+        # Заполняем поля
+        self._emp["emp_name"].set(name)
+        self._emp["emp_dept"].set(dept)
+        self._emp["emp_position"].set(position)
+        self._emp["chief_initials"].set(emp.get("chief_initials", ""))
+        self._emp["phone_short"].set(_extract_phone_short(phone_raw))
+
+        # Проверяем чего не хватает
+        missing = []
+        if not dept:       missing.append("Управление / Отдел")
+        if not position:   missing.append("Должность")
+        if not emp.get("chief_initials"): missing.append("Инициалы начальника")
+        if not phone_raw:  missing.append("Телефон")
+
+        if missing:
+            self._missing_var.set("⚠ Не найдено в справочнике: " + ", ".join(missing) + " — заполните вручную")
+        else:
+            self._missing_var.set("")
+
+        if not emp:
+            self._set_status(f"⚠ Сотрудник не в справочнике", "orange")
+        else:
+            self._set_status(f"✓ Найден: {name}", "green")
+
+    # ── Generate ──────────────────────────────────────
+
+    def _ask_duplicate(self, path: str, filename: str) -> str:
+        win = tk.Toplevel(self)
+        win.title("Файл уже существует")
+        win.resizable(False, False)
+        win.grab_set()
+        ttk.Label(win, text=f"Заявка уже существует:\n{filename}", wraplength=400, justify="left", padding=12).pack()
+        result = tk.StringVar(value="cancel")
+        bf = ttk.Frame(win, padding=8)
+        bf.pack()
+        def choose(v): result.set(v); win.destroy()
+        ttk.Button(bf, text="📂  Открыть существующую", command=lambda: choose("open")).grid(row=0, column=0, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="🔄  Заменить",             command=lambda: choose("replace")).grid(row=0, column=1, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="➕  Создать ещё одну",      command=lambda: choose("new")).grid(row=1, column=0, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="✖  Отмена",                command=lambda: choose("cancel")).grid(row=1, column=1, padx=6, pady=4, sticky="ew")
+        win.wait_window()
+        return result.get()
+
+    def _generate(self):
+        emp_name = self._emp["emp_name"].get().strip()
+        if not emp_name:
+            messagebox.showerror("Ошибка", "Сотрудник не выбран!")
+            return
+        reg = self._doc["reg_number"].get().strip()
+        if not reg:
+            messagebox.showerror("Ошибка", "Укажите регистрационный номер!")
+            return
+        date_str = self._doc["date_short"].get().strip()
+        try:
+            datetime.strptime(date_str, "%d.%m.%Y")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Формат даты: дд.мм.гггг")
+            return
+
+        emp_initials = make_initials(emp_name)
+
+        data = {
+            "reg_number":     reg,
+            "date_short":     date_str,
+            "emp_name":       emp_name,
+            "emp_dept":       self._emp["emp_dept"].get().strip(),
+            "emp_position":   self._emp["emp_position"].get().strip(),
+            "chief_initials": self._emp["chief_initials"].get().strip(),
+            "chief_pos_prefix": self._chief_pos_prefix,
+            "chief_abbrev":   self._chief_abbrev,
+            "phone_short":    self._emp["phone_short"].get().strip(),
+            "env":            self.env_var.get(),
+            "action_unlock":      self.action_unlock_var.get(),
+            "action_change_pass": self.action_change_pass_var.get(),
+        }
+
+        out_dir = self._doc["output_dir"].get().strip() or os.path.expanduser("~/Desktop")
+        os.makedirs(out_dir, exist_ok=True)
+        base_name = f"Заявка ЕЦП {emp_initials}.docx"
+        journal_desc_default = f"Заявка ЕЦП {emp_initials}"
+
+        confirm = ConfirmWindow(self, base_name, journal_desc_default, out_dir)
+        confirmed_name, confirmed_desc = confirm.result
+        if confirmed_name is None:
+            return
+        base_name = confirmed_name
+        output_path = os.path.join(out_dir, base_name)
+
+        if os.path.exists(output_path):
+            choice = self._ask_duplicate(output_path, base_name)
+            if choice == "open":
+                self._open_file(output_path)
+                return
+            elif choice == "cancel":
+                return
+            elif choice == "new":
+                ts = datetime.now().strftime("%H-%M-%S")
+                output_path = os.path.join(out_dir, base_name.replace(".docx", f"_{ts}.docx"))
+
+        try:
+            generate_ecp_zayavka(data, output_path)
+        except Exception as e:
+            messagebox.showerror("Ошибка при создании документа", str(e))
+            return
+
+        journal_path = self._file_vars["journal"].get().strip()
+        journal_msg = ""
+        if journal_path and os.path.exists(journal_path) and self.journal_info:
+            executor_name = self._doc["executor"].get().strip()
+            acquired, blocker = acquire_journal_lock(journal_path, executor_name)
+            if not acquired:
+                if blocker is None:
+                    messagebox.showwarning("Ошибка записи в журнал",
+                        "Не удалось заблокировать журнал для записи.\n"
+                        "Папка с журналом, возможно, открыта только для чтения.\n"
+                        "Обратитесь к администратору.")
+                    journal_msg = "⚠ Нет прав на запись рядом с журналом — запись не добавлена."
+                else:
+                    messagebox.showwarning("Журнал заблокирован",
+                        f"Журнал сейчас редактирует другой пользователь:\n{blocker}\n\nПодождите и попробуйте снова.")
+                    journal_msg = f"⚠ Журнал заблокирован: {blocker} — запись не добавлена."
+            else:
+                try:
+                    entry = {
+                        "pp":          self.journal_info["next_pp"],
+                        "date":        date_str,
+                        "reg":         reg,
+                        "description": confirmed_desc,
+                        "executor":    executor_name,
+                        "note":        "",
+                    }
+                    journal_msg = _write_journal_with_retry(
+                        journal_path, entry, self.journal_info["last_row_idx"]
+                    )
+                    if journal_msg.startswith("✓"):
+                        self.journal_info = get_journal_info(journal_path)
+                        self._doc["reg_number"].set(self.journal_info["next_reg"])
+                finally:
+                    release_journal_lock(journal_path)
+        else:
+            journal_msg = "Журнал не указан — запись не добавлена."
+
+        self._set_status(f"✓ Создан: {os.path.basename(output_path)}", "green")
+        if messagebox.askyesno("Готово!",
+            f"Заявка создана:\n{output_path}\n\n{journal_msg}\n\nОткрыть файл?"):
+            self._open_file(output_path)
+
+
+# ══════════════════════════════════════════════════════
 #  AktPKIApp — Акт установки СКЗИ ViPNet PKI Client
 # ══════════════════════════════════════════════════════
 
@@ -4397,8 +5130,9 @@ class LauncherWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Генератор заявок ViPNet")
-        self.geometry("560x700")
-        self.resizable(False, False)
+        self.geometry("600x750")
+        self.minsize(560, 500)
+        self.resizable(True, True)
         if sys.platform == "darwin":
             self.event_add("<<Copy>>",   "<Command-c>")
             self.event_add("<<Paste>>",  "<Command-v>")
@@ -4411,8 +5145,32 @@ class LauncherWindow(tk.Tk):
         self._build()
 
     def _build(self):
+        canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0, yscrollincrement=20)
+        vbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vbar.set)
+        vbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        inner = tk.Frame(canvas)
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+
+        def _on_mousewheel(event):
+            if not canvas.winfo_exists():
+                return
+            # Windows передаёт delta кратно 120, иногда меньше
+            if event.delta:
+                d = int(-1 * (event.delta / 120))
+                if d == 0:
+                    d = -1 if event.delta > 0 else 1
+                canvas.yview_scroll(d, "units")
+        self.bind_all("<MouseWheel>", _on_mousewheel)
+        self.bind_all("<Button-4>", lambda e: canvas.winfo_exists() and canvas.yview_scroll(-1, "units"))
+        self.bind_all("<Button-5>", lambda e: canvas.winfo_exists() and canvas.yview_scroll(1, "units"))
+
         ttk.Label(
-            self, text="Выберите тип документа", font=("TkDefaultFont", 14, "bold")
+            inner, text="Выберите тип документа", font=("TkDefaultFont", 14, "bold")
         ).pack(pady=(16, 4))
 
         def _card(parent, row, col, title, subtitle, cmd):
@@ -4439,13 +5197,13 @@ class LauncherWindow(tk.Tk):
 
         # ── Секция заявок ─────────────────────────────
         ttk.Label(
-            self,
+            inner,
             text="Заявки на установку СКЗИ",
             font=("TkDefaultFont", 10, "bold"),
             foreground="#555",
         ).pack(anchor="w", padx=24)
 
-        cards = tk.Frame(self)
+        cards = tk.Frame(inner)
         cards.pack(padx=16, fill="x")
         cards.columnconfigure(0, weight=1)
         cards.columnconfigure(1, weight=1)
@@ -4484,15 +5242,15 @@ class LauncherWindow(tk.Tk):
         )
 
         # ── Секция актов ──────────────────────────────
-        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=16, pady=(8, 4))
+        ttk.Separator(inner, orient="horizontal").pack(fill="x", padx=16, pady=(8, 4))
         ttk.Label(
-            self,
+            inner,
             text="Акты установки СКЗИ",
             font=("TkDefaultFont", 10, "bold"),
             foreground="#555",
         ).pack(anchor="w", padx=24)
 
-        acts = tk.Frame(self)
+        acts = tk.Frame(inner)
         acts.pack(padx=16, fill="x")
         acts.columnconfigure(0, weight=1)
         acts.columnconfigure(1, weight=1)
@@ -4528,6 +5286,29 @@ class LauncherWindow(tk.Tk):
             "Акт установки КриптоПро",
             "Акт установки СКЗИ КриптоПро CSP",
             lambda: self._open_app(AktKriptoproApp),
+        )
+
+        # ── Секция ЕЦП ────────────────────────────────
+        ttk.Separator(inner, orient="horizontal").pack(fill="x", padx=16, pady=(8, 4))
+        ttk.Label(
+            inner,
+            text="ЕЦП",
+            font=("TkDefaultFont", 10, "bold"),
+            foreground="#555",
+        ).pack(anchor="w", padx=24)
+
+        ecp_frame = tk.Frame(inner)
+        ecp_frame.pack(padx=16, fill="x")
+        ecp_frame.columnconfigure(0, weight=1)
+        ecp_frame.columnconfigure(1, weight=1)
+
+        _card(
+            ecp_frame,
+            0,
+            0,
+            "Заявка ЕЦП",
+            "Заявка на предоставление доступа в ГИС ЕЦП",
+            lambda: self._open_app(ECPApp),
         )
 
     def _open_app(self, AppClass):
