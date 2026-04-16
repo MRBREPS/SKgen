@@ -342,12 +342,7 @@ def load_phone_book(path: str) -> dict:
         else:
             phone_raw = str(row[5]).strip() if len(row) > 5 else ""
             dept_employees.append(
-                {
-                    "name": name,
-                    "position": pos,
-                    "department": current_dept,
-                    "phone": phone_raw,
-                }
+                {"name": name, "position": pos, "department": current_dept, "phone": phone_raw}
             )
     flush_dept()
     return result
@@ -1458,9 +1453,9 @@ def generate_ecp_zayavka(data: dict, output_path: str):
     sec = doc.sections[0]
     sec.page_width = Cm(21)
     sec.page_height = Cm(29.7)
-    sec.left_margin = Cm(2.0)  # 1134 DXA — точно по оригиналу
-    sec.right_margin = Cm(1.5)  # 851 DXA
-    sec.top_margin = Cm(1.5)  # 851 DXA
+    sec.left_margin = Cm(2.0)    # 1134 DXA — точно по оригиналу
+    sec.right_margin = Cm(1.5)   # 851 DXA
+    sec.top_margin = Cm(1.5)     # 851 DXA
     sec.bottom_margin = Cm(1.5)  # 851 DXA
 
     def _rn(para, text, sz=12, bold=False, underline=False, italic=False):
@@ -1582,11 +1577,7 @@ def generate_ecp_zayavka(data: dict, output_path: str):
         _rn(p, "ГИС ЕЦП (ИС КНД) Прод", sz=13)
         _rn(p, " / ", sz=13)
         _rn(p, "ГИС ЕЦП ТЕСТ", sz=13, bold=True, underline=True)
-    _rn(
-        p,
-        " прошу зарегистрировать/ изменить доступ/ добавить доступ/ отозвать доступ/ ",
-        sz=13,
-    )
+    _rn(p, " прошу зарегистрировать/ изменить доступ/ добавить доступ/ отозвать доступ/ ", sz=13)
     _rn(p, "разблокировать пользователя", sz=13, bold=unlock, underline=unlock)
     _rn(p, "/ ", sz=13)
     _rn(p, "сменить пароль", sz=13, bold=change_pass, underline=change_pass)
@@ -1660,14 +1651,11 @@ def generate_ecp_zayavka(data: dict, output_path: str):
 
     # Строка 2: данные (sz=12)
     values = [
-        ("1", C),
-        (data.get("emp_name", ""), L),
-        (data.get("emp_dept", ""), L),
-        (data.get("emp_position", ""), L),
-        ("", C),
-        ("", C),
-        ("", C),
-        ("", C),
+        ("1",                        C),
+        (data.get("emp_name", ""),   L),
+        (data.get("emp_dept", ""),   L),
+        (data.get("emp_position",""),L),
+        ("", C), ("", C), ("", C), ("", C),
     ]
     for ci, (val, align) in enumerate(values):
         cell = t1.cell(2, ci)
@@ -1719,7 +1707,6 @@ def generate_ecp_zayavka(data: dict, output_path: str):
     _rn(p2, phone if phone else "________", sz=14)
 
     doc.save(output_path)
-
 
 def generate_akt_pki(data: dict, output_path: str):
     """Строит Акт установки СКЗИ ViPNet PKI Client с нуля через python-docx."""
@@ -2998,27 +2985,23 @@ class BaseZayavkaApp(tk.Toplevel):
 
         # Скролл колёсиком — всегда главная страница
         def _scroll_delta(event):
-            return (
-                int(-1 * (event.delta / 120))
-                if abs(event.delta) >= 120
-                else (-1 if event.delta > 0 else 1)
-            )
+            return int(-1 * (event.delta / 120)) if abs(event.delta) >= 120 else (-1 if event.delta > 0 else 1)
 
         def _on_mousewheel(event):
             if not event.delta:
                 return
             if not main_canvas.winfo_exists():
                 return
-            main_canvas.yview_scroll(_scroll_delta(event), "units")
+            main_canvas.yview_scroll(_scroll_delta(event), 'units')
 
         def _on_wheel_linux(event, direction):
             if not main_canvas.winfo_exists():
                 return
-            main_canvas.yview_scroll(direction, "units")
+            main_canvas.yview_scroll(direction, 'units')
 
-        self.bind_all("<MouseWheel>", _on_mousewheel)
-        self.bind_all("<Button-4>", lambda e: _on_wheel_linux(e, -1))
-        self.bind_all("<Button-5>", lambda e: _on_wheel_linux(e, 1))
+        self.bind_all('<MouseWheel>', _on_mousewheel)
+        self.bind_all('<Button-4>', lambda e: _on_wheel_linux(e, -1))
+        self.bind_all('<Button-5>', lambda e: _on_wheel_linux(e,  1))
 
         PAD = dict(padx=8, pady=4)
 
@@ -3100,39 +3083,9 @@ class BaseZayavkaApp(tk.Toplevel):
         sb = ttk.Scrollbar(fs, orient="vertical", command=self.lb.yview)
         sb.grid(row=1, column=2, sticky="ns", pady=(4, 0))
         self.lb.configure(yscrollcommand=sb.set)
-        self.lb.bind(
-            "<MouseWheel>",
-            lambda e: (
-                (
-                    main_canvas.winfo_exists()
-                    and main_canvas.yview_scroll(
-                        (
-                            int(-1 * (e.delta / 120))
-                            if abs(e.delta) >= 120
-                            else (-1 if e.delta > 0 else 1)
-                        ),
-                        "units",
-                    ),
-                    "break",
-                )[1]
-                if e.delta
-                else "break"
-            ),
-        )
-        self.lb.bind(
-            "<Button-4>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"),
-                "break",
-            )[1],
-        )
-        self.lb.bind(
-            "<Button-5>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"),
-                "break",
-            )[1],
-        )
+        self.lb.bind('<MouseWheel>', lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(int(-1*(e.delta/120)) if abs(e.delta)>=120 else (-1 if e.delta>0 else 1), 'units'), 'break')[1] if e.delta else 'break')
+        self.lb.bind('<Button-4>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, 'units'), 'break')[1])
+        self.lb.bind('<Button-5>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll( 1, 'units'), 'break')[1])
 
         # ── Excel-превью ─────────────────────────────
         fp = ttk.LabelFrame(main, text="  Данные из таблицы актуализации  ", padding=6)
@@ -3710,8 +3663,8 @@ class ConfirmWindow(tk.Toplevel):
         self.resizable(True, False)
         self.grab_set()
 
-        self._result_filename = None
-        self._result_journal = None
+        self._result_filename   = None
+        self._result_journal    = None
 
         PAD = dict(padx=10, pady=4)
 
@@ -3748,12 +3701,12 @@ class ConfirmWindow(tk.Toplevel):
         # ── Кнопки ───────────────────────────────────
         bf = ttk.Frame(self)
         bf.pack(pady=(8, 12))
-        ttk.Button(bf, text="✓  Создать", width=18, command=self._ok).pack(
-            side="left", padx=8
-        )
-        ttk.Button(bf, text="✖  Отмена", width=14, command=self._cancel).pack(
-            side="left", padx=8
-        )
+        ttk.Button(
+            bf, text="✓  Создать", width=18, command=self._ok
+        ).pack(side="left", padx=8)
+        ttk.Button(
+            bf, text="✖  Отмена", width=14, command=self._cancel
+        ).pack(side="left", padx=8)
 
         self.bind("<Return>", lambda _: self._ok())
         self.bind("<Escape>", lambda _: self._cancel())
@@ -3772,7 +3725,7 @@ class ConfirmWindow(tk.Toplevel):
         if not fname.endswith(".docx"):
             fname += ".docx"
         self._result_filename = fname
-        self._result_journal = self._jdesc_var.get().strip()
+        self._result_journal  = self._jdesc_var.get().strip()
         self.destroy()
 
     def _cancel(self):
@@ -3935,11 +3888,7 @@ class ECPApp(tk.Toplevel):
         )
 
         def _sd(event):
-            return (
-                int(-1 * (event.delta / 120))
-                if abs(event.delta) >= 120
-                else (-1 if event.delta > 0 else 1)
-            )
+            return int(-1 * (event.delta / 120)) if abs(event.delta) >= 120 else (-1 if event.delta > 0 else 1)
 
         def _on_mousewheel(event):
             if not event.delta or not main_canvas.winfo_exists():
@@ -3965,29 +3914,17 @@ class ECPApp(tk.Toplevel):
         ff = ttk.LabelFrame(main, text="  Файлы данных  ", padding=8)
         ff.pack(fill="x", **PAD)
         file_specs = [
-            (
-                "phone_book",
-                "Телефонный справочник (.xls):",
-                [("XLS", "*.xls"), ("Все", "*.*")],
-            ),
-            (
-                "journal",
-                "Журнал регистрации (.docx):",
-                [("DOCX", "*.docx"), ("Все", "*.*")],
-            ),
+            ("phone_book", "Телефонный справочник (.xls):", [("XLS", "*.xls"), ("Все", "*.*")]),
+            ("journal",    "Журнал регистрации (.docx):",   [("DOCX", "*.docx"), ("Все", "*.*")]),
         ]
         self._file_vars = {}
         for ri, (key, label, ftypes) in enumerate(file_specs):
-            ttk.Label(ff, text=label, width=30, anchor="w").grid(
-                row=ri, column=0, sticky="w", pady=2
-            )
+            ttk.Label(ff, text=label, width=30, anchor="w").grid(row=ri, column=0, sticky="w", pady=2)
             var = tk.StringVar(value=self.cfg.get(key, ""))
             self._file_vars[key] = var
             ttk.Entry(ff, textvariable=var, width=42).grid(row=ri, column=1, padx=4)
             ttk.Button(
-                ff,
-                text="…",
-                width=3,
+                ff, text="…", width=3,
                 command=lambda k=key, ft=ftypes: self._pick_file(k, ft),
             ).grid(row=ri, column=2)
         ttk.Button(
@@ -4001,18 +3938,12 @@ class ECPApp(tk.Toplevel):
         ttk.Label(fs, text="ФИО:").grid(row=0, column=0, sticky="w")
         self.search_var = tk.StringVar()
         self.search_var.trace("w", self._on_search_change)
-        ttk.Entry(fs, textvariable=self.search_var, width=40).grid(
-            row=0, column=1, padx=4, sticky="ew"
-        )
+        ttk.Entry(fs, textvariable=self.search_var, width=40).grid(row=0, column=1, padx=4, sticky="ew")
         ttk.Button(fs, text="Найти", command=self._do_search).grid(row=0, column=2)
         self.status_var = tk.StringVar(value="")
         self._status_lbl = tk.Label(
-            fs,
-            textvariable=self.status_var,
-            foreground="#555",
-            wraplength=550,
-            anchor="w",
-            justify="left",
+            fs, textvariable=self.status_var, foreground="#555",
+            wraplength=550, anchor="w", justify="left",
             font=("TkDefaultFont", 11, "bold"),
         )
         self._status_lbl.grid(row=0, column=3, padx=(12, 4), sticky="ew")
@@ -4023,44 +3954,12 @@ class ECPApp(tk.Toplevel):
         sb = ttk.Scrollbar(fs, orient="vertical", command=self.lb.yview)
         sb.grid(row=1, column=2, sticky="ns", pady=(4, 0))
         self.lb.configure(yscrollcommand=sb.set)
-        self.lb.bind(
-            "<MouseWheel>",
-            lambda e: (
-                (
-                    main_canvas.winfo_exists()
-                    and main_canvas.yview_scroll(
-                        (
-                            int(-1 * (e.delta / 120))
-                            if abs(e.delta) >= 120
-                            else (-1 if e.delta > 0 else 1)
-                        ),
-                        "units",
-                    ),
-                    "break",
-                )[1]
-                if e.delta
-                else "break"
-            ),
-        )
-        self.lb.bind(
-            "<Button-4>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"),
-                "break",
-            )[1],
-        )
-        self.lb.bind(
-            "<Button-5>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"),
-                "break",
-            )[1],
-        )
+        self.lb.bind("<MouseWheel>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(int(-1*(e.delta/120)) if abs(e.delta)>=120 else (-1 if e.delta>0 else 1), "units"), "break")[1] if e.delta else "break")
+        self.lb.bind("<Button-4>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"), "break")[1])
+        self.lb.bind("<Button-5>", lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"), "break")[1])
 
         # ── Данные сотрудника ─────────────────────────
-        fe = ttk.LabelFrame(
-            main, text="  Данные сотрудника (для документа)  ", padding=8
-        )
+        fe = ttk.LabelFrame(main, text="  Данные сотрудника (для документа)  ", padding=8)
         fe.pack(fill="x", **PAD)
         fe.columnconfigure(1, weight=1)
         self._emp = {}
@@ -4068,55 +3967,39 @@ class ECPApp(tk.Toplevel):
         missing_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
         self._missing_var = tk.StringVar(value="")
         self._missing_lbl = tk.Label(
-            missing_frame,
-            textvariable=self._missing_var,
-            foreground="#cc0000",
-            anchor="w",
-            justify="left",
-            font=("TkDefaultFont", 10),
-            wraplength=600,
+            missing_frame, textvariable=self._missing_var,
+            foreground="#cc0000", anchor="w", justify="left",
+            font=("TkDefaultFont", 10), wraplength=600,
         )
         self._missing_lbl.pack(fill="x")
 
         fields = [
-            ("emp_name", "ФИО сотрудника:"),
-            ("emp_dept", "Управление / Отдел:"),
-            ("emp_position", "Должность:"),
-            ("chief_initials", "Инициалы начальника (подпись):"),
-            ("phone_short", "Телефон (4 цифры):"),
+            ("emp_name",      "ФИО сотрудника:"),
+            ("emp_dept",      "Управление / Отдел:"),
+            ("emp_position",  "Должность:"),
+            ("chief_initials","Инициалы начальника (подпись):"),
+            ("phone_short",   "Телефон (4 цифры):"),
         ]
         for i, (key, label) in enumerate(fields, start=1):
-            ttk.Label(fe, text=label, anchor="w", width=34).grid(
-                row=i, column=0, sticky="w", pady=2
-            )
+            ttk.Label(fe, text=label, anchor="w", width=34).grid(row=i, column=0, sticky="w", pady=2)
             var = tk.StringVar()
             self._emp[key] = var
-            ttk.Entry(fe, textvariable=var, width=46).grid(
-                row=i, column=1, padx=4, sticky="ew"
-            )
+            ttk.Entry(fe, textvariable=var, width=46).grid(row=i, column=1, padx=4, sticky="ew")
 
         # ── Среда ─────────────────────────────────────
         fenv = ttk.LabelFrame(main, text="  Среда  ", padding=8)
         fenv.pack(fill="x", **PAD)
         self.env_var = tk.StringVar(value="prod")
-        ttk.Radiobutton(
-            fenv, text="ГИС ЕЦП (ИС КНД) Прод", variable=self.env_var, value="prod"
-        ).pack(side="left", padx=16)
-        ttk.Radiobutton(
-            fenv, text="ГИС ЕЦП ТЕСТ", variable=self.env_var, value="test"
-        ).pack(side="left", padx=16)
+        ttk.Radiobutton(fenv, text="ГИС ЕЦП (ИС КНД) Прод", variable=self.env_var, value="prod").pack(side="left", padx=16)
+        ttk.Radiobutton(fenv, text="ГИС ЕЦП ТЕСТ",           variable=self.env_var, value="test").pack(side="left", padx=16)
 
         # ── Действия ──────────────────────────────────
         fact = ttk.LabelFrame(main, text="  Действие  ", padding=8)
         fact.pack(fill="x", **PAD)
         self.action_unlock_var = tk.BooleanVar(value=False)
         self.action_change_pass_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            fact, text="Разблокировать пользователя", variable=self.action_unlock_var
-        ).pack(anchor="w", padx=16)
-        ttk.Checkbutton(
-            fact, text="Сменить пароль", variable=self.action_change_pass_var
-        ).pack(anchor="w", padx=16)
+        ttk.Checkbutton(fact, text="Разблокировать пользователя", variable=self.action_unlock_var).pack(anchor="w", padx=16)
+        ttk.Checkbutton(fact, text="Сменить пароль",              variable=self.action_change_pass_var).pack(anchor="w", padx=16)
 
         # ── Реквизиты ─────────────────────────────────
         fd = ttk.LabelFrame(main, text="  Реквизиты документа  ", padding=8)
@@ -4124,34 +4007,24 @@ class ECPApp(tk.Toplevel):
         fd.columnconfigure(1, weight=1)
         self._doc = {}
         now = datetime.now()
-        for i, (key, label, default) in enumerate(
-            [
-                ("reg_number", "Рег. номер:", ""),
-                ("date_short", "Дата (дд.мм.гггг):", now.strftime("%d.%m.%Y")),
-                ("executor", "Исполнитель (журнал):", ""),
-                ("output_dir", "Папка сохранения:", os.path.expanduser("~/Desktop")),
-            ]
-        ):
-            ttk.Label(fd, text=label, anchor="w", width=26).grid(
-                row=i, column=0, sticky="w", pady=2
-            )
+        for i, (key, label, default) in enumerate([
+            ("reg_number", "Рег. номер:",         ""),
+            ("date_short", "Дата (дд.мм.гггг):",  now.strftime("%d.%m.%Y")),
+            ("executor",   "Исполнитель (журнал):", ""),
+            ("output_dir", "Папка сохранения:",    os.path.expanduser("~/Desktop")),
+        ]):
+            ttk.Label(fd, text=label, anchor="w", width=26).grid(row=i, column=0, sticky="w", pady=2)
             var = tk.StringVar(value=default)
             self._doc[key] = var
-            ttk.Entry(fd, textvariable=var, width=44).grid(
-                row=i, column=1, padx=4, sticky="ew"
-            )
+            ttk.Entry(fd, textvariable=var, width=44).grid(row=i, column=1, padx=4, sticky="ew")
             if key == "output_dir":
-                ttk.Button(fd, text="…", width=3, command=self._pick_outdir).grid(
-                    row=i, column=2
-                )
+                ttk.Button(fd, text="…", width=3, command=self._pick_outdir).grid(row=i, column=2)
 
         ttk.Button(
             main, text="📄   Создать заявку и добавить в журнал", command=self._generate
         ).pack(pady=10, ipadx=16, ipady=6)
 
-        self._load_status_var = tk.StringVar(
-            value="Укажите файлы данных и нажмите «Загрузить»"
-        )
+        self._load_status_var = tk.StringVar(value="Укажите файлы данных и нажмите «Загрузить»")
         self._load_status_lbl = ttk.Label(
             main, textvariable=self._load_status_var, foreground="#555", wraplength=700
         )
@@ -4160,12 +4033,7 @@ class ECPApp(tk.Toplevel):
     # ── Helpers ───────────────────────────────────────
 
     def _set_status(self, text, color="gray"):
-        clr = {
-            "green": "#1a7a1a",
-            "red": "#cc0000",
-            "orange": "#b06000",
-            "gray": "#555",
-        }
+        clr = {"green": "#1a7a1a", "red": "#cc0000", "orange": "#b06000", "gray": "#555"}
         self.status_var.set(text)
         self._status_lbl.configure(foreground=clr.get(color, "#555"))
 
@@ -4261,10 +4129,10 @@ class ECPApp(tk.Toplevel):
 
     def _fill_employee(self, name: str):
         emp = self.phone_data.get(name, {})
-        position = emp.get("position", "")
-        dept = emp.get("department", "")
+        position  = emp.get("position", "")
+        dept      = emp.get("department", "")
         phone_raw = emp.get("phone", "")
-        abbrev = abbreviate_dept(dept)
+        abbrev    = abbreviate_dept(dept)
 
         self._chief_pos_prefix = chief_position_prefix(emp.get("chief_position", ""))
         self._chief_abbrev = abbrev
@@ -4278,21 +4146,13 @@ class ECPApp(tk.Toplevel):
 
         # Проверяем чего не хватает
         missing = []
-        if not dept:
-            missing.append("Управление / Отдел")
-        if not position:
-            missing.append("Должность")
-        if not emp.get("chief_initials"):
-            missing.append("Инициалы начальника")
-        if not phone_raw:
-            missing.append("Телефон")
+        if not dept:       missing.append("Управление / Отдел")
+        if not position:   missing.append("Должность")
+        if not emp.get("chief_initials"): missing.append("Инициалы начальника")
+        if not phone_raw:  missing.append("Телефон")
 
         if missing:
-            self._missing_var.set(
-                "⚠ Не найдено в справочнике: "
-                + ", ".join(missing)
-                + " — заполните вручную"
-            )
+            self._missing_var.set("⚠ Не найдено в справочнике: " + ", ".join(missing) + " — заполните вручную")
         else:
             self._missing_var.set("")
 
@@ -4308,33 +4168,15 @@ class ECPApp(tk.Toplevel):
         win.title("Файл уже существует")
         win.resizable(False, False)
         win.grab_set()
-        ttk.Label(
-            win,
-            text=f"Заявка уже существует:\n{filename}",
-            wraplength=400,
-            justify="left",
-            padding=12,
-        ).pack()
+        ttk.Label(win, text=f"Заявка уже существует:\n{filename}", wraplength=400, justify="left", padding=12).pack()
         result = tk.StringVar(value="cancel")
         bf = ttk.Frame(win, padding=8)
         bf.pack()
-
-        def choose(v):
-            result.set(v)
-            win.destroy()
-
-        ttk.Button(
-            bf, text="📂  Открыть существующую", command=lambda: choose("open")
-        ).grid(row=0, column=0, padx=6, pady=4, sticky="ew")
-        ttk.Button(bf, text="🔄  Заменить", command=lambda: choose("replace")).grid(
-            row=0, column=1, padx=6, pady=4, sticky="ew"
-        )
-        ttk.Button(bf, text="➕  Создать ещё одну", command=lambda: choose("new")).grid(
-            row=1, column=0, padx=6, pady=4, sticky="ew"
-        )
-        ttk.Button(bf, text="✖  Отмена", command=lambda: choose("cancel")).grid(
-            row=1, column=1, padx=6, pady=4, sticky="ew"
-        )
+        def choose(v): result.set(v); win.destroy()
+        ttk.Button(bf, text="📂  Открыть существующую", command=lambda: choose("open")).grid(row=0, column=0, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="🔄  Заменить",             command=lambda: choose("replace")).grid(row=0, column=1, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="➕  Создать ещё одну",      command=lambda: choose("new")).grid(row=1, column=0, padx=6, pady=4, sticky="ew")
+        ttk.Button(bf, text="✖  Отмена",                command=lambda: choose("cancel")).grid(row=1, column=1, padx=6, pady=4, sticky="ew")
         win.wait_window()
         return result.get()
 
@@ -4357,23 +4199,21 @@ class ECPApp(tk.Toplevel):
         emp_initials = make_initials(emp_name)
 
         data = {
-            "reg_number": reg,
-            "date_short": date_str,
-            "emp_name": emp_name,
-            "emp_dept": self._emp["emp_dept"].get().strip(),
-            "emp_position": self._emp["emp_position"].get().strip(),
+            "reg_number":     reg,
+            "date_short":     date_str,
+            "emp_name":       emp_name,
+            "emp_dept":       self._emp["emp_dept"].get().strip(),
+            "emp_position":   self._emp["emp_position"].get().strip(),
             "chief_initials": self._emp["chief_initials"].get().strip(),
             "chief_pos_prefix": self._chief_pos_prefix,
-            "chief_abbrev": self._chief_abbrev,
-            "phone_short": self._emp["phone_short"].get().strip(),
-            "env": self.env_var.get(),
-            "action_unlock": self.action_unlock_var.get(),
+            "chief_abbrev":   self._chief_abbrev,
+            "phone_short":    self._emp["phone_short"].get().strip(),
+            "env":            self.env_var.get(),
+            "action_unlock":      self.action_unlock_var.get(),
             "action_change_pass": self.action_change_pass_var.get(),
         }
 
-        out_dir = self._doc["output_dir"].get().strip() or os.path.expanduser(
-            "~/Desktop"
-        )
+        out_dir = self._doc["output_dir"].get().strip() or os.path.expanduser("~/Desktop")
         os.makedirs(out_dir, exist_ok=True)
         base_name = f"Заявка ЕЦП {emp_initials}.docx"
         journal_desc_default = f"Заявка ЕЦП {emp_initials}"
@@ -4394,9 +4234,7 @@ class ECPApp(tk.Toplevel):
                 return
             elif choice == "new":
                 ts = datetime.now().strftime("%H-%M-%S")
-                output_path = os.path.join(
-                    out_dir, base_name.replace(".docx", f"_{ts}.docx")
-                )
+                output_path = os.path.join(out_dir, base_name.replace(".docx", f"_{ts}.docx"))
 
         try:
             generate_ecp_zayavka(data, output_path)
@@ -4411,32 +4249,24 @@ class ECPApp(tk.Toplevel):
             acquired, blocker = acquire_journal_lock(journal_path, executor_name)
             if not acquired:
                 if blocker is None:
-                    messagebox.showwarning(
-                        "Ошибка записи в журнал",
+                    messagebox.showwarning("Ошибка записи в журнал",
                         "Не удалось заблокировать журнал для записи.\n"
                         "Папка с журналом, возможно, открыта только для чтения.\n"
-                        "Обратитесь к администратору.",
-                    )
-                    journal_msg = (
-                        "⚠ Нет прав на запись рядом с журналом — запись не добавлена."
-                    )
+                        "Обратитесь к администратору.")
+                    journal_msg = "⚠ Нет прав на запись рядом с журналом — запись не добавлена."
                 else:
-                    messagebox.showwarning(
-                        "Журнал заблокирован",
-                        f"Журнал сейчас редактирует другой пользователь:\n{blocker}\n\nПодождите и попробуйте снова.",
-                    )
-                    journal_msg = (
-                        f"⚠ Журнал заблокирован: {blocker} — запись не добавлена."
-                    )
+                    messagebox.showwarning("Журнал заблокирован",
+                        f"Журнал сейчас редактирует другой пользователь:\n{blocker}\n\nПодождите и попробуйте снова.")
+                    journal_msg = f"⚠ Журнал заблокирован: {blocker} — запись не добавлена."
             else:
                 try:
                     entry = {
-                        "pp": self.journal_info["next_pp"],
-                        "date": date_str,
-                        "reg": reg,
+                        "pp":          self.journal_info["next_pp"],
+                        "date":        date_str,
+                        "reg":         reg,
                         "description": confirmed_desc,
-                        "executor": executor_name,
-                        "note": "",
+                        "executor":    executor_name,
+                        "note":        "",
                     }
                     journal_msg = _write_journal_with_retry(
                         journal_path, entry, self.journal_info["last_row_idx"]
@@ -4450,10 +4280,8 @@ class ECPApp(tk.Toplevel):
             journal_msg = "Журнал не указан — запись не добавлена."
 
         self._set_status(f"✓ Создан: {os.path.basename(output_path)}", "green")
-        if messagebox.askyesno(
-            "Готово!",
-            f"Заявка создана:\n{output_path}\n\n{journal_msg}\n\nОткрыть файл?",
-        ):
+        if messagebox.askyesno("Готово!",
+            f"Заявка создана:\n{output_path}\n\n{journal_msg}\n\nОткрыть файл?"):
             self._open_file(output_path)
 
 
@@ -4519,27 +4347,23 @@ class AktPKIApp(tk.Toplevel):
 
         # Скролл колёсиком — всегда главная страница
         def _sd(event):
-            return (
-                int(-1 * (event.delta / 120))
-                if abs(event.delta) >= 120
-                else (-1 if event.delta > 0 else 1)
-            )
+            return int(-1 * (event.delta / 120)) if abs(event.delta) >= 120 else (-1 if event.delta > 0 else 1)
 
         def _on_mousewheel(event):
             if not event.delta:
                 return
             if not main_canvas.winfo_exists():
                 return
-            main_canvas.yview_scroll(_sd(event), "units")
+            main_canvas.yview_scroll(_sd(event), 'units')
 
         def _on_wheel_linux(event, direction):
             if not main_canvas.winfo_exists():
                 return
-            main_canvas.yview_scroll(direction, "units")
+            main_canvas.yview_scroll(direction, 'units')
 
-        self.bind_all("<MouseWheel>", _on_mousewheel)
-        self.bind_all("<Button-4>", lambda e: _on_wheel_linux(e, -1))
-        self.bind_all("<Button-5>", lambda e: _on_wheel_linux(e, 1))
+        self.bind_all('<MouseWheel>', _on_mousewheel)
+        self.bind_all('<Button-4>', lambda e: _on_wheel_linux(e, -1))
+        self.bind_all('<Button-5>', lambda e: _on_wheel_linux(e,  1))
 
         PAD = dict(padx=8, pady=4)
 
@@ -4615,39 +4439,9 @@ class AktPKIApp(tk.Toplevel):
         sb = ttk.Scrollbar(fs, orient="vertical", command=self.lb.yview)
         sb.grid(row=1, column=2, sticky="ns", pady=(4, 0))
         self.lb.configure(yscrollcommand=sb.set)
-        self.lb.bind(
-            "<MouseWheel>",
-            lambda e: (
-                (
-                    main_canvas.winfo_exists()
-                    and main_canvas.yview_scroll(
-                        (
-                            int(-1 * (e.delta / 120))
-                            if abs(e.delta) >= 120
-                            else (-1 if e.delta > 0 else 1)
-                        ),
-                        "units",
-                    ),
-                    "break",
-                )[1]
-                if e.delta
-                else "break"
-            ),
-        )
-        self.lb.bind(
-            "<Button-4>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"),
-                "break",
-            )[1],
-        )
-        self.lb.bind(
-            "<Button-5>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"),
-                "break",
-            )[1],
-        )
+        self.lb.bind('<MouseWheel>', lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(int(-1*(e.delta/120)) if abs(e.delta)>=120 else (-1 if e.delta>0 else 1), 'units'), 'break')[1] if e.delta else 'break')
+        self.lb.bind('<Button-4>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, 'units'), 'break')[1])
+        self.lb.bind('<Button-5>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll( 1, 'units'), 'break')[1])
 
         # Превью таблица Excel
         self._preview = ExcelPreviewTable(main)
@@ -4730,39 +4524,9 @@ class AktPKIApp(tk.Toplevel):
         jsb.grid(row=2, column=2, sticky="ns", pady=(4, 0))
         fj.rowconfigure(2, weight=1)
         self._jtree.bind("<<TreeviewSelect>>", self._on_jresult_select)
-        self._jtree.bind(
-            "<MouseWheel>",
-            lambda e: (
-                (
-                    main_canvas.winfo_exists()
-                    and main_canvas.yview_scroll(
-                        (
-                            int(-1 * (e.delta / 120))
-                            if abs(e.delta) >= 120
-                            else (-1 if e.delta > 0 else 1)
-                        ),
-                        "units",
-                    ),
-                    "break",
-                )[1]
-                if e.delta
-                else "break"
-            ),
-        )
-        self._jtree.bind(
-            "<Button-4>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, "units"),
-                "break",
-            )[1],
-        )
-        self._jtree.bind(
-            "<Button-5>",
-            lambda e: (
-                main_canvas.winfo_exists() and main_canvas.yview_scroll(1, "units"),
-                "break",
-            )[1],
-        )
+        self._jtree.bind('<MouseWheel>', lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(int(-1*(e.delta/120)) if abs(e.delta)>=120 else (-1 if e.delta>0 else 1), 'units'), 'break')[1] if e.delta else 'break')
+        self._jtree.bind('<Button-4>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll(-1, 'units'), 'break')[1])
+        self._jtree.bind('<Button-5>',   lambda e: (main_canvas.winfo_exists() and main_canvas.yview_scroll( 1, 'units'), 'break')[1])
         ttk.Label(fj, text="Ссылка на заявку:", anchor="w").grid(
             row=3, column=0, sticky="w", pady=2
         )
@@ -5371,6 +5135,8 @@ class LauncherWindow(tk.Tk):
         self.resizable(True, True)
         if sys.platform == "darwin":
             self._setup_mac_clipboard()
+        elif sys.platform == "win32":
+            self._setup_win_clipboard()
         self._build()
 
     def _setup_mac_clipboard(self):
@@ -5420,10 +5186,55 @@ class LauncherWindow(tk.Tk):
         self.bind_class("Entry", "<Command-x>", _cut)
         self.bind_class("Entry", "<Command-a>", _select_all)
 
+    def _setup_win_clipboard(self):
+        root = self
+
+        def _copy(e):
+            try:
+                sel = e.widget.selection_get()
+                root.clipboard_clear()
+                root.clipboard_append(sel)
+            except Exception:
+                pass
+            return "break"
+
+        def _paste(e):
+            try:
+                text = root.clipboard_get()
+                try:
+                    e.widget.delete("sel.first", "sel.last")
+                except Exception:
+                    pass
+                e.widget.insert("insert", text)
+            except Exception:
+                pass
+            return "break"
+
+        def _cut(e):
+            try:
+                sel = e.widget.selection_get()
+                root.clipboard_clear()
+                root.clipboard_append(sel)
+                e.widget.delete("sel.first", "sel.last")
+            except Exception:
+                pass
+            return "break"
+
+        def _select_all(e):
+            try:
+                e.widget.select_range(0, "end")
+                e.widget.icursor("end")
+            except Exception:
+                pass
+            return "break"
+
+        self.bind_class("Entry", "<Control-c>", _copy)
+        self.bind_class("Entry", "<Control-v>", _paste)
+        self.bind_class("Entry", "<Control-x>", _cut)
+        self.bind_class("Entry", "<Control-a>", _select_all)
+
     def _build(self):
-        canvas = tk.Canvas(
-            self, borderwidth=0, highlightthickness=0, yscrollincrement=20
-        )
+        canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0, yscrollincrement=20)
         vbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=vbar.set)
         vbar.pack(side="right", fill="y")
@@ -5431,9 +5242,7 @@ class LauncherWindow(tk.Tk):
 
         inner = tk.Frame(canvas)
         win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
-        inner.bind(
-            "<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        inner.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
 
         def _on_mousewheel(event):
@@ -5445,16 +5254,9 @@ class LauncherWindow(tk.Tk):
                 if d == 0:
                     d = -1 if event.delta > 0 else 1
                 canvas.yview_scroll(d, "units")
-
         self.bind_all("<MouseWheel>", _on_mousewheel)
-        self.bind_all(
-            "<Button-4>",
-            lambda e: canvas.winfo_exists() and canvas.yview_scroll(-1, "units"),
-        )
-        self.bind_all(
-            "<Button-5>",
-            lambda e: canvas.winfo_exists() and canvas.yview_scroll(1, "units"),
-        )
+        self.bind_all("<Button-4>", lambda e: canvas.winfo_exists() and canvas.yview_scroll(-1, "units"))
+        self.bind_all("<Button-5>", lambda e: canvas.winfo_exists() and canvas.yview_scroll(1, "units"))
 
         ttk.Label(
             inner, text="Выберите тип документа", font=("TkDefaultFont", 14, "bold")
